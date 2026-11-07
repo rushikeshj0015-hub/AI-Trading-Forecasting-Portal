@@ -152,6 +152,33 @@ h3{font-size:14px;color:#62d5ff;margin:20px 0 10px}#quantum-intelligence table{f
 </section>
 
 <section class="panel">
+
+<section class="panel" id="chatgpt-analyst">
+<h2>ChatGPT Analyst · ALADDIN AI Bridge</h2>
+<p class="muted">Generate a market-analysis prompt using current dashboard data. Copy it into ChatGPT, then import the JSON response here.</p>
+
+<div class="controls">
+<button type="button" id="ai-build-prompt">Build Analysis Prompt</button>
+<button type="button" id="ai-copy-prompt">Copy Prompt</button>
+<button type="button" id="ai-open-chatgpt">Open ChatGPT</button>
+</div>
+
+<h3>Generated Market Data Prompt</h3>
+<textarea id="ai-prompt" rows="12" style="width:100%;background:#080d18;color:#e8eefb;border:1px solid #405477;border-radius:8px;padding:12px;resize:vertical" placeholder="Click Build Analysis Prompt first..."></textarea>
+
+<h3>Paste ChatGPT JSON Response</h3>
+<textarea id="ai-response" rows="9" style="width:100%;background:#080d18;color:#e8eefb;border:1px solid #405477;border-radius:8px;padding:12px;resize:vertical" placeholder="Paste the complete JSON response from ChatGPT here..."></textarea>
+
+<div class="controls">
+<button type="button" id="ai-import">Import Analysis into ALADDIN</button>
+</div>
+
+<p class="muted" id="ai-bridge-status">ChatGPT bridge ready. Load market data first.</p>
+<h3>Imported ChatGPT Analysis</h3>
+<pre id="ai-bridge-output" style="white-space:pre-wrap;overflow-wrap:anywhere;background:#080d18;padding:12px;border-radius:8px;color:#48dfa4;font-size:12px">No imported analysis yet.</pre>
+<p class="muted">Manual ChatGPT connection. No API key, paid API or automatic order execution.</p>
+</section>
+
 <h2>Indicator methodology</h2>
 <table>
 <tr><td>EMA 20 / EMA 50</td><td>Trend direction</td></tr>
@@ -166,6 +193,7 @@ h3{font-size:14px;color:#62d5ff;margin:20px 0 10px}#quantum-intelligence table{f
 
 <script src="quantum-engine.js"></script>
 <script src="learning-ledger.js"></script>
+<script src="chatgpt-bridge.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 let candles=[];
@@ -206,7 +234,7 @@ async function loadMarket(){
    const res=await fetch(url);
    if(!res.ok)throw Error("Binance returned HTTP "+res.status);
    const raw=await res.json();
-   candles=raw.map(x=>({time:x[0],open:+x[1],high:+x[2],low:+x[3],close:+x[4]}));
+   candles=raw.map(x=>({time:x[0],open:+x[1],high:+x[2],low:+x[3],close:+x[4],volume:+x[5]}));
    $("source").textContent="Source: Binance public market API · Candle timestamps shown below.";
   }else{
    const range=tf==="1h"?"1mo":"1y";
@@ -217,7 +245,7 @@ async function loadMarket(){
    const j=await res.json(),r=j.chart.result?.[0];
    if(!r)throw Error(j.chart.error?.description||"No data returned");
    const q=r.indicators.quote[0];
-   candles=r.timestamp.map((t,i)=>({time:t*1000,open:q.open[i],high:q.high[i],low:q.low[i],close:q.close[i]})).filter(x=>[x.open,x.high,x.low,x.close].every(Number.isFinite));
+   candles=r.timestamp.map((t,i)=>({time:t*1000,open:q.open[i],high:q.high[i],low:q.low[i],close:q.close[i],volume:q.volume&&q.volume[i]!=null?Number(q.volume[i]):null})).filter(x=>[x.open,x.high,x.low,x.close].every(Number.isFinite));
    $("source").textContent="Source: Yahoo Finance chart endpoint · Availability and delay are provider-dependent; not an official exchange feed.";
   }
   if(candles.length<55)throw Error("Insufficient candles for indicator analysis.");
@@ -411,6 +439,41 @@ function drawChart(){
 window.addEventListener("resize",()=>{if(candles.length)drawChart()});
 loadMarket();
 setInterval(loadMarket,60000);
+
+if (window.QuantumBridge) {
+  window.QuantumBridge.init(() => {
+    const latest = candles.length ? candles[candles.length - 1] : null;
+    let calculatedForecast = null;
+
+    try {
+      if (window.QuantumEngine && candles.length >= 55) {
+        calculatedForecast = window.QuantumEngine.buildForecast(candles);
+      }
+    } catch (error) {
+      calculatedForecast = { error: error.message };
+    }
+
+    return {
+      symbol: $("market").value,
+      timeframe: $("timeframe").value,
+      dataSource: $("source").textContent,
+      latestPrice: latest ? latest.close : null,
+      indicators: {
+        trend: $("trend").textContent,
+        RSI14: $("rsi").textContent,
+        ATR14: $("atr").textContent,
+        entry: $("entry").textContent,
+        stopLoss: $("stop").textContent,
+        target1: $("t1").textContent,
+        target2: $("t2").textContent
+      },
+      calculatedForecast,
+      candles
+    };
+  });
+} else {
+  console.error("ChatGPT bridge script failed to load.");
+}
 </script>
 </body>
 </html>
