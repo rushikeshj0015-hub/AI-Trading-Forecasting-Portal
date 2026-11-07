@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ALADDIN QUANTUM OMNI</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#080d18;color:#e8eefb;font-family:Arial,sans-serif}
+header{padding:20px;background:#101a2d;border-bottom:1px solid #263550}
+h1{font-size:22px;color:#62d5ff;margin:0}header p{color:#91a4c3;font-size:12px}
+main{padding:15px;max-width:1100px;margin:auto}
+.panel{background:#111c30;border:1px solid #263653;border-radius:12px;padding:15px;margin-bottom:14px}
+.controls{display:flex;gap:9px;flex-wrap:wrap}
+select,button{background:#1c2b45;color:white;border:1px solid #405477;padding:11px;border-radius:8px}
+button{background:#087da9;border:0;font-weight:bold}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.metric{background:#17243a;padding:13px;border-radius:9px}
+.metric small{color:#9aacc8;display:block;margin-bottom:8px}
+.metric strong{font-size:19px}
+#chart{width:100%;height:230px}
+.green{color:#48dfa4}.red{color:#ff727e}.muted{color:#91a4c3;font-size:12px}
+table{width:100%;border-collapse:collapse}td{padding:10px;border-bottom:1px solid #263653}
+h2{font-size:16px;margin-top:0}
+footer{padding:18px;color:#8799b5;font-size:11px;text-align:center}
+@media(min-width:700px){.grid{grid-template-columns:repeat(4,1fr)}}
+</style>
+</head>
+<body>
+<header>
+<h1>ALADDIN QUANTUM OMNI</h1>
+<p>Multi-market quantitative analysis · Research dashboard</p>
+</header>
+<main>
+<section class="panel">
+<h2>Market scanner</h2>
+<div class="controls">
+<select id="market">
+<option value="BTCUSDT">Bitcoin · BTC</option>
+<option value="ETHUSDT">Ethereum · ETH</option>
+<option value="SOLUSDT">Solana · SOL</option>
+<option value="BNBUSDT">BNB</option>
+<option value="XRPUSDT">XRP</option>
+<option value="^NSEI">NIFTY 50</option>
+<option value="^BSESN">SENSEX</option>
+<option value="RELIANCE.NS">Reliance</option>
+<option value="TCS.NS">TCS</option>
+<option value="HDFCBANK.NS">HDFC Bank</option>
+<option value="SBIN.NS">SBI</option>
+<option value="AAPL">Apple</option>
+<option value="NVDA">NVIDIA</option>
+<option value="GC=F">Gold futures</option>
+<option value="SI=F">Silver futures</option>
+<option value="CL=F">Crude oil futures</option>
+</select>
+<select id="timeframe">
+<option value="1h">1 hour</option>
+<option value="1d">1 day</option>
+</select>
+<button onclick="loadMarket()">Analyse market</button>
+</div>
+<p class="muted" id="status">Waiting for market data…</p>
+</section>
+
+<section class="grid">
+<div class="metric"><small>Latest price</small><strong id="price">—</strong></div>
+<div class="metric"><small>Trend</small><strong id="trend">—</strong></div>
+<div class="metric"><small>RSI (14)</small><strong id="rsi">—</strong></div>
+<div class="metric"><small>ATR (14)</small><strong id="atr">—</strong></div>
+</section>
+
+<section class="panel">
+<h2>Price history</h2>
+<canvas id="chart"></canvas>
+<p class="muted" id="source">No data loaded.</p>
+</section>
+
+<section class="panel">
+<h2>Quantitative trade levels</h2>
+<div class="grid">
+<div class="metric"><small>Reference entry</small><strong id="entry">—</strong></div>
+<div class="metric"><small>Stop loss</small><strong id="stop">—</strong></div>
+<div class="metric"><small>Target 1 · 1R</small><strong id="t1">—</strong></div>
+<div class="metric"><small>Target 2 · 2R</small><strong id="t2">—</strong></div>
+</div>
+<p id="signal">Awaiting analysis.</p>
+<p class="muted">Levels are indicator-based research estimates, not guaranteed execution prices or personalized financial advice.</p>
+</section>
+
+<section class="panel">
+<h2>Indicator methodology</h2>
+<table>
+<tr><td>EMA 20 / EMA 50</td><td>Trend direction</td></tr>
+<tr><td>RSI 14</td><td>Momentum</td></tr>
+<tr><td>ATR 14</td><td>Volatility and stop distance</td></tr>
+<tr><td>Risk model</td><td>1.5 × ATR stop; targets at 1R and 2R</td></tr>
+</table>
+<p class="muted">Historical validation and probabilistic turning-point forecasts are not implemented yet.</p>
+</section>
+</main>
+<footer>ALADDIN QUANTUM OMNI · Data availability depends on external providers. No automatic order execution.</footer>
+
+<script>
+const $=id=>document.getElementById(id);
+let candles=[];
+
+function ema(values,period){
+ let k=2/(period+1),out=[values[0]];
+ for(let i=1;i<values.length;i++)out.push(values[i]*k+out[i-1]*(1-k));
+ return out;
+}
+function rsi(values,n=14){
+ if(values.length<=n)return NaN;
+ let gains=0,losses=0;
+ for(let i=values.length-n;i<values.length;i++){
+  let d=values[i]-values[i-1];
+  if(d>0)gains+=d;else losses-=d;
+ }
+ if(losses===0)return 100;
+ return 100-100/(1+(gains/n)/(losses/n));
+}
+function atr(data,n=14){
+ let trs=[];
+ for(let i=1;i<data.length;i++){
+  let c=data[i],p=data[i-1];
+  trs.push(Math.max(c.high-c.low,Math.abs(c.high-p.close),Math.abs(c.low-p.close)));
+ }
+ return trs.slice(-n).reduce((a,b)=>a+b,0)/Math.min(n,trs.length);
+}
+function fmt(x){return Number.isFinite(x)?x.toLocaleString("en-IN",{maximumFractionDigits:4}):"—"}
+
+async function loadMarket(){
+ const symbol=$("market").value,tf=$("timeframe").value;
+ $("status").textContent="Fetching market data…";
+ $("signal").textContent="Calculating indicators…";
+ try{
+  if(/USDT$/.test(symbol)){
+   const interval=tf==="1h"?"1h":"1d";
+   const url=`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=200`;
+   const res=await fetch(url);
+   if(!res.ok)throw Error("Binance returned HTTP "+res.status);
+   const raw=await res.json();
+   candles=raw.map(x=>({time:x[0],open:+x[1],high:+x[2],low:+x[3],close:+x[4]}));
+   $("source").textContent="Source: Binance public market API · Candle timestamps shown below.";
+  }else{
+   const range=tf==="1h"?"1mo":"1y";
+   const interval=tf==="1h"?"1h":"1d";
+   const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}`;
+   const res=await fetch(url);
+   if(!res.ok)throw Error("Yahoo Finance returned HTTP "+res.status);
+   const j=await res.json(),r=j.chart.result?.[0];
+   if(!r)throw Error(j.chart.error?.description||"No data returned");
+   const q=r.indicators.quote[0];
+   candles=r.timestamp.map((t,i)=>({time:t*1000,open:q.open[i],high:q.high[i],low:q.low[i],close:q.close[i]})).filter(x=>[x.open,x.high,x.low,x.close].every(Number.isFinite));
+   $("source").textContent="Source: Yahoo Finance chart endpoint · Availability and delay are provider-dependent; not an official exchange feed.";
+  }
+  if(candles.length<55)throw Error("Insufficient candles for indicator analysis.");
+  analyse();
+ }catch(e){
+  $("status").textContent="DATA ERROR: "+e.message;
+  $("source").textContent="No verified market data available. Check connection or try another instrument.";
+  $("signal").textContent="Analysis unavailable. No prices or forecasts have been fabricated.";
+ }
+}
+function analyse(){
+ const closes=candles.map(x=>x.close),last=closes.at(-1);
+ const e20=ema(closes,20).at(-1),e50=ema(closes,50).at(-1);
+ const rv=rsi(closes),av=atr(candles);
+ const bullish=e20>e50&&rv>50,bearish=e20<e50&&rv<50;
+ const direction=bullish?1:bearish?-1:0;
+ const side=direction===1?"BULLISH":direction===-1?"BEARISH":"NEUTRAL";
+ $("price").textContent=fmt(last);
+ $("trend").textContent=side;
+ $("trend").className=direction===1?"green":direction===-1?"red":"";
+ $("rsi").textContent=fmt(rv);
+ $("atr").textContent=fmt(av);
+ if(direction===0){
+  ["entry","stop","t1","t2"].forEach(id=>$(id).textContent="—");
+  $("signal").textContent="No directional setup: EMA and RSI conditions do not agree.";
+ }else{
+  const entry=last,stop=entry-direction*1.5*av,risk=Math.abs(entry-stop);
+  $("entry").textContent=fmt(entry);
+  $("stop").textContent=fmt(stop);
+  $("t1").textContent=fmt(entry+direction*risk);
+  $("t2").textContent=fmt(entry+direction*2*risk);
+  $("signal").textContent=side+" setup based on EMA20/EMA50 and RSI14. This is a rule-based signal, not a validated prediction.";
+ }
+ const t=candles.at(-1).time;
+ $("status").textContent="Data loaded · Last candle: "+new Date(t).toLocaleString();
+ drawChart();
+}
+function drawChart(){
+ const c=$("chart"),ctx=c.getContext("2d"),w=c.clientWidth,h=230,dpr=devicePixelRatio||1;
+ c.width=w*dpr;c.height=h*dpr;ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);
+ const data=candles.slice(-100),min=Math.min(...data.map(x=>x.low)),max=Math.max(...data.map(x=>x.high));
+ const pad=12,range=max-min||1;
+ ctx.strokeStyle="#30415e";ctx.lineWidth=1;
+ for(let i=0;i<5;i++){let y=pad+i*(h-2*pad)/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+ const step=(w-30)/data.length;
+ data.forEach((x,i)=>{
+  const px=15+i*step+step/2;
+  const y=v=>h-pad-(v-min)/range*(h-2*pad);
+  ctx.strokeStyle=x.close>=x.open?"#48dfa4":"#ff727e";
+  ctx.fillStyle=ctx.strokeStyle;
+  ctx.beginPath();ctx.moveTo(px,y(x.high));ctx.lineTo(px,y(x.low));ctx.stroke();
+  const top=Math.min(y(x.open),y(x.close)),height=Math.max(1,Math.abs(y(x.open)-y(x.close)));
+  ctx.fillRect(px-step*.3,top,Math.max(1,step*.6),height);
+ });
+}
+window.addEventListener("resize",()=>{if(candles.length)drawChart()});
+loadMarket();
+setInterval(loadMarket,60000);
+</script>
+</body>
+</html>
