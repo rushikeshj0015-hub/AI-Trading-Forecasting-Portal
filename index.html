@@ -22,6 +22,7 @@ button{background:#087da9;border:0;font-weight:bold}
 table{width:100%;border-collapse:collapse}td{padding:10px;border-bottom:1px solid #263653}
 h2{font-size:16px;margin-top:0}
 footer{padding:18px;color:#8799b5;font-size:11px;text-align:center}
+h3{font-size:14px;color:#62d5ff;margin:20px 0 10px}#quantum-intelligence table{font-size:12px}#quantum-intelligence td{padding:9px;white-space:nowrap}
 @media(min-width:700px){.grid{grid-template-columns:repeat(4,1fr)}}
 </style>
 </head>
@@ -84,6 +85,70 @@ footer{padding:18px;color:#8799b5;font-size:11px;text-align:center}
 </div>
 <p id="signal">Awaiting analysis.</p>
 <p class="muted">Levels are indicator-based research estimates, not guaranteed execution prices or personalized financial advice.</p>
+</section>
+
+
+<section class="panel" id="quantum-intelligence">
+<h2>Quantum Intelligence · Forecast Analysis</h2>
+<p class="muted">Calculated from the loaded historical candles. Turning dates are estimates, not guaranteed reversals.</p>
+
+<h3>Gann Square of Nine</h3>
+<div class="grid">
+<div class="metric"><small>Nearest support</small><strong id="gann-support">—</strong></div>
+<div class="metric"><small>Nearest resistance</small><strong id="gann-resistance">—</strong></div>
+</div>
+<div style="overflow-x:auto">
+<table>
+<thead><tr><td>Angle</td><td>Support</td><td>Resistance</td></tr></thead>
+<tbody id="gann-table"><tr><td colspan="3">Waiting for analysis</td></tr></tbody>
+</table>
+</div>
+
+<h3>Time-Cycle Intelligence</h3>
+<div class="grid">
+<div class="metric"><small>Median swing cycle</small><strong id="cycle-length">—</strong></div>
+<div class="metric"><small>Historical swing pivots</small><strong id="cycle-pivots">—</strong></div>
+</div>
+<div style="overflow-x:auto">
+<table>
+<thead><tr><td>Cycle window</td><td>Bars ahead</td><td>Estimated date</td></tr></thead>
+<tbody id="cycle-table"><tr><td colspan="3">Waiting for analysis</td></tr></tbody>
+</table>
+</div>
+
+<h3>Fibonacci Levels</h3>
+<div style="overflow-x:auto">
+<table>
+<thead><tr><td>Ratio</td><td>Upward level</td><td>Downward level</td></tr></thead>
+<tbody id="fib-table"><tr><td colspan="3">Waiting for analysis</td></tr></tbody>
+</table>
+</div>
+
+<h3>Market Pressure & Confirmation</h3>
+<div class="grid">
+<div class="metric"><small>Momentum bias</small><strong id="quantum-momentum">—</strong></div>
+<div class="metric"><small>10-bar change</small><strong id="quantum-change">—</strong></div>
+<div class="metric"><small>Volume ratio</small><strong id="quantum-volume">—</strong></div>
+<div class="metric"><small>Volume confirmation</small><strong id="quantum-volume-status">—</strong></div>
+</div>
+
+<h3>Forecast Scenarios</h3>
+<div id="quantum-scenarios" class="muted">Waiting for analysis</div>
+<p class="muted" id="quantum-confidence">Confidence not calibrated.</p>
+
+<h3>Unconnected Analysis Modules</h3>
+<p class="muted" id="quantum-modules">Waiting for analysis</p>
+
+<h3>Learning Ledger · Browser Statistics</h3>
+<div class="grid">
+<div class="metric"><small>Total forecasts</small><strong id="ledger-total">—</strong></div>
+<div class="metric"><small>Evaluated forecasts</small><strong id="ledger-evaluated">—</strong></div>
+<div class="metric"><small>Target hits</small><strong id="ledger-targets">—</strong></div>
+<div class="metric"><small>Stop hits</small><strong id="ledger-stops">—</strong></div>
+<div class="metric"><small>Open forecasts</small><strong id="ledger-open">—</strong></div>
+<div class="metric"><small>Recorded win rate</small><strong id="ledger-winrate">—</strong></div>
+</div>
+<p class="muted" id="ledger-note">Statistics are stored in this browser only.</p>
 </section>
 
 <section class="panel">
@@ -252,10 +317,79 @@ function analyse(){
    $("signal").textContent += " · Ledger error: "+error.message;
   }
  }
+ renderIntelligence();
  const t=candles.at(-1).time;
  $("status").textContent="Data loaded · Last candle: "+new Date(t).toLocaleString();
  drawChart();
 }
+
+function renderIntelligence(){
+ const engine=window.QuantumEngine;
+ const ledger=window.QuantumLedger;
+ if(!engine||!candles.length)return;
+
+ const f=engine.buildForecast(candles);
+ if(!f.ready)return;
+
+ const put=(id,value)=>{
+  const el=$(id);
+  if(el)el.textContent=value;
+ };
+
+ put("gann-support",f.nearestSupport?fmt(f.nearestSupport.price):"Unavailable");
+ put("gann-resistance",f.nearestResistance?fmt(f.nearestResistance.price):"Unavailable");
+
+ $("gann-table").innerHTML=f.gann.map(x=>
+  "<tr><td>"+x.degrees+"°</td><td>"+fmt(x.support)+"</td><td>"+fmt(x.resistance)+"</td></tr>"
+ ).join("");
+
+ put("cycle-length",Number.isFinite(f.cycles.medianSwingBars)
+  ? f.cycles.medianSwingBars.toFixed(1)+" bars":"Insufficient pivots");
+ put("cycle-pivots",String(f.cycles.pivots.length));
+
+ $("cycle-table").innerHTML=f.cycles.windows.length
+  ? f.cycles.windows.map(x=>{
+    const date=new Date(x.estimatedTime);
+    return "<tr><td>"+x.label+"</td><td>"+x.barsAhead+"</td><td>"+
+      (Number.isFinite(date.getTime())?date.toLocaleString():"Unavailable")+"</td></tr>";
+   }).join("")
+  : "<tr><td colspan='3'>Insufficient historical swing data</td></tr>";
+
+ $("fib-table").innerHTML=f.fibonacci.map(x=>
+  "<tr><td>"+(x.ratio*100).toFixed(1)+"%</td><td>"+fmt(x.upward)+"</td><td>"+fmt(x.downward)+"</td></tr>"
+ ).join("");
+
+ put("quantum-momentum",f.momentum.bias);
+ put("quantum-change",f.momentum.change10BarsPercent.toFixed(2)+"%");
+ put("quantum-volume",f.volume.available?f.volume.ratio.toFixed(2)+"x":"Unavailable");
+ put("quantum-volume-status",f.volume.available
+  ? (f.volume.ratio>1.3?"Expansion detected":"No strong expansion")
+  : "Unavailable");
+
+ $("quantum-scenarios").innerHTML=f.scenarios.map(x=>
+  "<div class='metric' style='margin:8px 0'><strong>"+x.name+": "+x.bias+
+  "</strong><p class='muted'>"+x.condition+"</p></div>"
+ ).join("");
+
+ put("quantum-confidence",f.confidence);
+
+ put("quantum-modules",
+  "Astro: "+f.astro.reason+" | Institutional: "+f.institutional.reason+
+  " | Elliott Wave: "+f.waveAnalysis.reason
+ );
+
+ if(ledger){
+  const s=ledger.getSummary();
+  put("ledger-total",String(s.totalForecasts));
+  put("ledger-evaluated",String(s.evaluatedForecasts));
+  put("ledger-targets",String(s.targetHits));
+  put("ledger-stops",String(s.stopHits));
+  put("ledger-open",String(s.openForecasts));
+  put("ledger-winrate",s.winRatePercent===null?"Not available":s.winRatePercent+"%");
+  put("ledger-note",s.note+" Win rate is based only on evaluated browser-local forecasts.");
+ }
+}
+
 function drawChart(){
  const c=$("chart"),ctx=c.getContext("2d"),w=c.clientWidth,h=230,dpr=devicePixelRatio||1;
  c.width=w*dpr;c.height=h*dpr;ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);
