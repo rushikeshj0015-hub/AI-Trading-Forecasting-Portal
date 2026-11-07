@@ -99,6 +99,8 @@ footer{padding:18px;color:#8799b5;font-size:11px;text-align:center}
 </main>
 <footer>ALADDIN QUANTUM OMNI · Data availability depends on external providers. No automatic order execution.</footer>
 
+<script src="quantum-engine.js"></script>
+<script src="learning-ledger.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 let candles=[];
@@ -154,6 +156,14 @@ async function loadMarket(){
    $("source").textContent="Source: Yahoo Finance chart endpoint · Availability and delay are provider-dependent; not an official exchange feed.";
   }
   if(candles.length<55)throw Error("Insufficient candles for indicator analysis.");
+
+  // Evaluate previous forecasts using newly received candles.
+  if(window.QuantumLedger){
+   window.QuantumLedger.evaluateOpenForecasts(
+    symbol, tf, candles
+   );
+  }
+
   analyse();
  }catch(e){
   $("status").textContent="DATA ERROR: "+e.message;
@@ -176,6 +186,32 @@ function analyse(){
  if(direction===0){
   ["entry","stop","t1","t2"].forEach(id=>$(id).textContent="—");
   $("signal").textContent="No directional setup: EMA and RSI conditions do not agree.";
+
+  try {
+   const candleTime=candles.at(-1).time;
+   const key="aq_last_"+$("market").value+"_"+$("timeframe").value;
+
+   if(localStorage.getItem(key)!==String(candleTime)){
+    window.QuantumLedger.recordForecast({
+     symbol:$("market").value,
+     timeframe:$("timeframe").value,
+     dataSource:$("source").textContent,
+     modelVersion:"ALADDIN-QUANTUM-BASELINE-1",
+     forecast:{
+      direction:"Neutral",
+      entry:null,
+      stopLoss:null,
+      target1:null,
+      target2:null,
+      candleTime:candleTime
+     }
+    });
+    localStorage.setItem(key,String(candleTime));
+    $("signal").textContent += " · Neutral forecast saved.";
+   }
+  } catch(error) {
+   $("signal").textContent += " · Ledger error: "+error.message;
+  }
  }else{
   const entry=last,stop=entry-direction*1.5*av,risk=Math.abs(entry-stop);
   $("entry").textContent=fmt(entry);
@@ -183,6 +219,38 @@ function analyse(){
   $("t1").textContent=fmt(entry+direction*risk);
   $("t2").textContent=fmt(entry+direction*2*risk);
   $("signal").textContent=side+" setup based on EMA20/EMA50 and RSI14. This is a rule-based signal, not a validated prediction.";
+
+  try {
+   const candleTime=candles.at(-1).time;
+   const key="aq_last_"+$("market").value+"_"+$("timeframe").value;
+
+   if(localStorage.getItem(key)!==String(candleTime)){
+    const technicalSnapshot=window.QuantumEngine
+      ? window.QuantumEngine.buildForecast(candles)
+      : null;
+
+    window.QuantumLedger.recordForecast({
+     symbol:$("market").value,
+     timeframe:$("timeframe").value,
+     dataSource:$("source").textContent,
+     modelVersion:"ALADDIN-QUANTUM-BASELINE-1",
+     forecast:{
+      direction:side==="BULLISH"?"Bullish":"Bearish",
+      entry:entry,
+      stopLoss:stop,
+      target1:entry+direction*risk,
+      target2:entry+direction*2*risk,
+      candleTime:candleTime,
+      technicalSnapshot:technicalSnapshot
+     }
+    });
+
+    localStorage.setItem(key,String(candleTime));
+    $("signal").textContent += " · Original forecast saved to learning ledger.";
+   }
+  } catch(error) {
+   $("signal").textContent += " · Ledger error: "+error.message;
+  }
  }
  const t=candles.at(-1).time;
  $("status").textContent="Data loaded · Last candle: "+new Date(t).toLocaleString();
